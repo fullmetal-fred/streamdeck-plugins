@@ -1,5 +1,6 @@
 node_modules/
-dist/
+com.fullmetalfred.cliptype.sdPlugin/
+release/
 *.streamDeckPlugin
 .DS_Store
 Thumbs.db

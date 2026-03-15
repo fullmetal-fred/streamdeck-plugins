@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 288 288" width="288" height="288">
+  <!-- Background circle -->
+  <circle cx="144" cy="144" r="120" fill="#1a1a2e"/>
+  <!-- Clipboard body -->
+  <rect x="80" y="62" width="128" height="170" rx="12" ry="12"
+        fill="none" stroke="#e0e0e0" stroke-width="7"/>
+  <!-- Clipboard clip -->
+  <rect x="110" y="46" width="68" height="28" rx="6" ry="6"
+        fill="#e0e0e0"/>
+  <!-- Text lines -->
+  <line x1="108" y1="120" x2="180" y2="120"
+        stroke="#e0e0e0" stroke-width="5" stroke-linecap="round"/>
+  <line x1="108" y1="148" x2="168" y2="148"
+        stroke="#e0e0e0" stroke-width="5" stroke-linecap="round"/>
+  <line x1="108" y1="176" x2="156" y2="176"
+        stroke="#e0e0e0" stroke-width="5" stroke-linecap="round"/>
+  <!-- Typing cursor blink -->
+  <rect x="160" y="168" width="4" height="18" fill="#4fc3f7"/>
+  <!-- Keyboard hint at bottom -->
+  <rect x="96" y="200" width="96" height="18" rx="3" ry="3"
+        fill="none" stroke="#4fc3f7" stroke-width="2" opacity="0.6"/>
+  <line x1="120" y1="204" x2="120" y2="214"
+        stroke="#4fc3f7" stroke-width="1" opacity="0.4"/>
+  <line x1="144" y1="204" x2="144" y2="214"
+        stroke="#4fc3f7" stroke-width="1" opacity="0.4"/>
+  <line x1="168" y1="204" x2="168" y2="214"
+        stroke="#4fc3f7" stroke-width="1" opacity="0.4"/>
+</svg>

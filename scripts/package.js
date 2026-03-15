@@ -1,37 +1,46 @@
 /**
- * Package script for ClipType Stream Deck plugin.
+ * Package the plugin into a .streamDeckPlugin file.
  *
- * Creates a .streamDeckPlugin file (ZIP archive) for distribution.
- * The Elgato Distribution Tool can also do this, but this script
- * allows automated builds.
+ * A .streamDeckPlugin file is just a ZIP with a different extension.
+ * Double-clicking it installs the plugin in Stream Deck.
  */
 
-const { execSync } = require("child_process");
-const fs = require("fs");
-const path = require("path");
+import { createWriteStream } from "node:fs";
+import { readdir, stat } from "node:fs/promises";
+import { join, relative } from "node:path";
+import { createReadStream } from "node:fs";
+import { pipeline } from "node:stream/promises";
+import { createGzip } from "node:zlib";
+import { execSync } from "node:child_process";
 
 const PLUGIN_DIR = "com.fullmetalfred.cliptype.sdPlugin";
-const DIST_DIR = "dist";
-const OUTPUT_FILE = path.join(DIST_DIR, "com.fullmetalfred.cliptype.streamDeckPlugin");
+const OUTPUT = "release/com.fullmetalfred.cliptype.streamDeckPlugin";
 
-// Ensure dist exists
-fs.mkdirSync(DIST_DIR, { recursive: true });
+async function main() {
+  console.log("Packaging ClipType...");
 
-// Remove old package if exists
-if (fs.existsSync(OUTPUT_FILE)) {
-  fs.unlinkSync(OUTPUT_FILE);
-}
-
-// Create ZIP (the .streamDeckPlugin format is just a ZIP)
-try {
-  execSync(`cd "${PLUGIN_DIR}" && zip -r "../${OUTPUT_FILE}" .`, {
+  // Install runtime deps in plugin dir
+  console.log("Installing runtime dependencies...");
+  execSync("npm install --omit=dev", {
+    cwd: PLUGIN_DIR,
     stdio: "inherit",
   });
-  console.log(`\nPackaged: ${OUTPUT_FILE}`);
-  console.log("Double-click this file to install in Stream Deck.");
-} catch (err) {
-  // Fallback for Windows (no zip command)
-  console.log("zip command not found. On Windows, use the Elgato Distribution Tool:");
-  console.log("https://docs.elgato.com/sdk/plugins/packaging");
-  console.log(`\nOr manually ZIP the contents of ${PLUGIN_DIR}/ and rename to .streamDeckPlugin`);
+
+  // Create release dir
+  execSync("mkdir -p release");
+
+  // Use system zip (available on macOS and most dev environments)
+  // Stream Deck expects a zip file with .streamDeckPlugin extension
+  execSync(
+    `cd ${PLUGIN_DIR} && zip -r "../${OUTPUT}" . -x "*.DS_Store" -x "__MACOSX/*"`,
+    { stdio: "inherit" }
+  );
+
+  console.log(`\nPackaged → ${OUTPUT}`);
+  console.log("Double-click to install in Stream Deck.");
 }
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ClipType Settings</title>
+    <link
+      rel="stylesheet"
+      href="https://sdpi-components.dev/css/streamdeck.css"
+    />
+    <style>
+      .sdpi-wrapper { padding: 0 16px; }
+      .sdpi-heading {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 16px 0 8px;
+        color: #ccc;
+      }
+      .trial-note {
+        font-size: 10px;
+        color: #999;
+        padding: 4px 0 0 126px;
+        line-height: 1.4;
+      }
+      details {
+        margin: 12px 0;
+        padding: 0 8px;
+      }
+      details summary {
+        color: #999;
+        font-size: 11px;
+        cursor: pointer;
+      }
+      details p {
+        font-size: 10px;
+        color: #888;
+        line-height: 1.5;
+        margin: 6px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="sdpi-wrapper">
+      <!-- Timing -->
+      <div class="sdpi-heading">Timing</div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Keystroke Delay</div>
+        <input
+          class="sdpi-item-value"
+          id="charDelayMs"
+          type="number"
+          min="0"
+          max="1000"
+          value="20"
+          data-setting="charDelayMs"
+        />
+        <span class="sdpi-item-label" style="flex: 0 0 auto">ms</span>
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Line Delay</div>
+        <input
+          class="sdpi-item-value"
+          id="lineDelayMs"
+          type="number"
+          min="0"
+          max="5000"
+          value="50"
+          data-setting="lineDelayMs"
+        />
+        <span class="sdpi-item-label" style="flex: 0 0 auto">ms</span>
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Start Delay</div>
+        <input
+          class="sdpi-item-value"
+          id="initialDelayMs"
+          type="number"
+          min="0"
+          max="10000"
+          value="500"
+          data-setting="initialDelayMs"
+        />
+        <span class="sdpi-item-label" style="flex: 0 0 auto">ms</span>
+      </div>
+
+      <!-- Safety -->
+      <div class="sdpi-heading">Safety</div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Max Characters</div>
+        <input
+          class="sdpi-item-value"
+          id="maxLength"
+          type="number"
+          min="1"
+          max="100000"
+          value="10000"
+          data-setting="maxLength"
+        />
+      </div>
+
+      <!-- License -->
+      <div class="sdpi-heading">License</div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">License Key</div>
+        <input
+          class="sdpi-item-value"
+          id="licenseKey"
+          type="text"
+          placeholder="XXXX-XXXX-XXXX-XXXX"
+          data-setting="licenseKey"
+        />
+      </div>
+      <div class="trial-note">
+        Without a license key, ClipType works in trial mode (30 characters max).
+      </div>
+
+      <!-- Help -->
+      <details>
+        <summary>Tips for remote consoles</summary>
+        <p>
+          <strong>Slow KVM/iLO?</strong> Increase Keystroke Delay to 50–100ms.
+          Some consoles need 100ms+ to keep up.
+        </p>
+        <p>
+          <strong>Start Delay</strong> gives you time to click into the remote
+          console window after pressing the Stream Deck button.
+        </p>
+        <p>
+          <strong>Max Characters</strong> prevents accidental mega-pastes.
+          Increase it if you regularly paste large configs.
+        </p>
+      </details>
+    </div>
+
+    <script>
+      // ─── Stream Deck PI ↔ Plugin communication ──────────────────────
+      let websocket = null;
+      let uuid = null;
+      let actionInfo = null;
+      let currentSettings = {};
+
+      function connectElgatoStreamDeckSocket(
+        inPort,
+        inPropertyInspectorUUID,
+        inRegisterEvent,
+        inInfo,
+        inActionInfo
+      ) {
+        uuid = inPropertyInspectorUUID;
+        actionInfo = JSON.parse(inActionInfo);
+        currentSettings = actionInfo?.payload?.settings || {};
+
+        // Populate fields from saved settings
+        document.querySelectorAll("[data-setting]").forEach((el) => {
+          const key = el.dataset.setting;
+          if (currentSettings[key] !== undefined) {
+            el.value = currentSettings[key];
+          }
+        });
+
+        websocket = new WebSocket("ws://127.0.0.1:" + inPort);
+
+        websocket.onopen = function () {
+          websocket.send(
+            JSON.stringify({ event: inRegisterEvent, uuid: uuid })
+          );
+        };
+
+        // Save on change
+        document.querySelectorAll("[data-setting]").forEach((el) => {
+          el.addEventListener("change", saveSettings);
+          el.addEventListener("input", debounce(saveSettings, 500));
+        });
+      }
+
+      function saveSettings() {
+        document.querySelectorAll("[data-setting]").forEach((el) => {
+          currentSettings[el.dataset.setting] = el.value;
+        });
+
+        if (websocket && websocket.readyState === WebSocket.OPEN) {
+          websocket.send(
+            JSON.stringify({
+              event: "setSettings",
+              context: uuid,
+              payload: currentSettings,
+            })
+          );
+        }
+      }
+
+      function debounce(fn, ms) {
+        let timer;
+        return function (...args) {
+          clearTimeout(timer);
+          timer = setTimeout(() => fn.apply(this, args), ms);
+        };
+      }
+    </script>
+  </body>
+</html>

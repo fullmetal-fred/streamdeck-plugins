@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 144 144" width="144" height="144">
+  <!-- Clipboard body -->
+  <rect x="34" y="28" width="76" height="100" rx="8" ry="8"
+        fill="none" stroke="#ffffff" stroke-width="5"/>
+  <!-- Clipboard clip -->
+  <rect x="52" y="18" width="40" height="18" rx="4" ry="4"
+        fill="#ffffff"/>
+  <!-- Text lines -->
+  <line x1="52" y1="64" x2="92" y2="64"
+        stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+  <line x1="52" y1="80" x2="84" y2="80"
+        stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+  <line x1="52" y1="96" x2="76" y2="96"
+        stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+  <!-- Typing cursor -->
+  <rect x="78" y="90" width="3" height="14" fill="#ffffff" opacity="0.8"/>
+</svg>

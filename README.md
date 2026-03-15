@@ -13,35 +13,12 @@ Built for sysadmins who need to paste into remote consoles (iLO, iDRAC, KVM, vSp
 
 ## Installation
 
-### Prerequisites
+1. Download the `.streamDeckPlugin` file from Releases
+2. Double-click to install — that's it
 
-- Elgato Stream Deck with Stream Deck software v6.0+
-- Windows 10+ or macOS 10.15+
+No helper processes, no background services. The plugin runs natively inside Stream Deck via the Node.js SDK.
 
-### Install the Plugin
-
-1. Download the latest `.streamDeckPlugin` file from Releases
-2. Double-click to install
-
-### Install the Helper
-
-The plugin requires a small background helper to simulate keystrokes.
-
-**Windows (PowerShell):**
-
-```powershell
-# Run from the plugin directory:
-powershell -ExecutionPolicy Bypass -File helpers\cliptype-helper.ps1
-```
-
-**macOS:**
-
-```bash
-# Grant accessibility permissions first (System Preferences > Security > Privacy > Accessibility)
-./helpers/cliptype-helper.sh
-```
-
-> **Tip:** Add the helper to your startup items so it runs automatically.
+**macOS users:** You'll be prompted to grant Accessibility permissions (System Events needs it for keystroke simulation).
 
 ## Configuration
 
@@ -49,46 +26,54 @@ Click the ClipType action in Stream Deck to configure:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Char Delay | 20ms | Delay between each keystroke |
+| Keystroke Delay | 20ms | Delay between each keystroke |
 | Line Delay | 50ms | Extra delay after Enter key |
-| Max Length | 10,000 | Safety limit on characters typed |
+| Start Delay | 500ms | Pause before typing starts (time to focus target window) |
+| Max Characters | 10,000 | Safety limit on characters typed |
 
-**Slow console?** Increase the char delay to 50-100ms. Some KVM consoles need 100ms+ to keep up.
+**Slow console?** Increase keystroke delay to 50–100ms. Some KVM consoles need 100ms+ to keep up.
+
+## Licensing
+
+ClipType works in trial mode (30 characters) without a license key. Purchase a key to unlock unlimited characters.
+
+Enter your license key in the Property Inspector settings panel.
 
 ## Building from Source
 
 ```bash
-# Build (copies plugin to dist/)
-npm run build
-
-# Package (creates .streamDeckPlugin file)
-npm run package
+pnpm install
+make build    # Builds icons + assembles .sdPlugin directory
+make package  # Creates .streamDeckPlugin installer
 ```
 
 ## Architecture
 
 ```
-com.fullmetalfred.cliptype.sdPlugin/
-├── manifest.json          # Plugin metadata & action definitions
-├── plugin.html            # Plugin entry point (loads JS)
-├── plugin.js              # Core logic: clipboard read + keystroke dispatch
-├── pi/
-│   ├── inspector.html     # Settings UI (char delay, line delay, max length)
-│   └── inspector.css      # Stream Deck-style dark theme
-├── helpers/
-│   ├── cliptype-helper.ps1  # Windows keystroke simulator (PowerShell)
-│   └── cliptype-helper.sh   # macOS keystroke simulator (AppleScript)
-├── libs/
-│   └── connectElgatoStreamDeckSocket.js  # SDK bootstrap
-└── imgs/
-    ├── action.svg         # Button icon
-    ├── plugin.svg         # Plugin icon
-    └── category.svg       # Category icon
+src/
+├── plugin.js                    # Entry point — registers actions with SDK
+├── actions/
+│   └── type-clipboard.js        # Main action: clipboard read → keystroke dispatch
+└── util/
+    ├── clipboard.js             # OS-native clipboard read (pbpaste / PowerShell)
+    ├── keyboard.js              # OS-native keystroke sim (osascript / SendKeys)
+    └── license.js               # Stripe license key validation
+
+pi/
+└── inspector.html               # Property Inspector (timing + license settings)
+
+assets/icons/                    # Source SVGs
+scripts/
+├── build.js                     # Assemble .sdPlugin dir from source
+├── icons.js                     # SVG → PNG conversion (sharp)
+└── package.js                   # Create .streamDeckPlugin ZIP
 ```
+
+**No helper process.** The plugin runs as a Node.js process inside Stream Deck (SDK v2 with `Nodejs` runtime). It reads the clipboard via `pbpaste`/`Get-Clipboard` and types via `osascript`/`SendKeys` — all through `child_process`, zero native npm dependencies.
 
 ## Why Not Just Ctrl+V?
 
-Remote console technologies like HP iLO, Dell iDRAC, Supermicro IPMI, and VMware vSphere console all use different methods to capture keyboard input. Many of them intercept keystrokes at the hardware level and don't support the OS clipboard. ClipType works around this by simulating individual key presses, which these consoles handle correctly.
+Remote console technologies like HP iLO, Dell iDRAC, Supermicro IPMI, and VMware vSphere console intercept keystrokes at the hardware level and don't support the OS clipboard. ClipType types individual key presses, which these consoles handle correctly.
 
 ## License
 
