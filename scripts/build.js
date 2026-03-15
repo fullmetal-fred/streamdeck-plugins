@@ -56,7 +56,7 @@ async function main() {
     Icon: "imgs/plugin",
     Name: "ClipType",
     Version: "1.0.0",
-    SDKVersion: 2,
+    SDKVersion: 1,
     Nodejs: {
       Version: "20",
       Debug: "enabled",

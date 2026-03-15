@@ -1,9 +1,4 @@
-import streamDeck, {
-  action,
-  KeyDownEvent,
-  SingletonAction,
-  WillAppearEvent,
-} from "@elgato/streamdeck";
+import streamDeck, { SingletonAction } from "@elgato/streamdeck";
 
 import { readClipboard } from "../util/clipboard.js";
 import { typeText } from "../util/keyboard.js";
@@ -11,20 +6,27 @@ import { validateLicense } from "../util/license.js";
 
 const TRIAL_MAX_CHARS = 30;
 
+const DEFAULTS = {
+  charDelayMs: 20,
+  lineDelayMs: 50,
+  initialDelayMs: 500,
+  maxLength: 10000,
+  licenseKey: "",
+};
+
 /**
  * Types clipboard contents via simulated keystrokes.
  */
-@action({ UUID: "com.fullmetalfred.cliptype.type" })
 export class TypeClipboard extends SingletonAction {
-  /** @param {WillAppearEvent} ev */
   async onWillAppear(ev) {
-    const settings = await this.#getSettings(ev);
-    streamDeck.logger.debug("TypeClipboard appeared", settings);
+    streamDeck.logger.debug(
+      "TypeClipboard appeared",
+      { ...DEFAULTS, ...ev.payload?.settings }
+    );
   }
 
-  /** @param {KeyDownEvent} ev */
   async onKeyDown(ev) {
-    const settings = await this.#getSettings(ev);
+    const settings = { ...DEFAULTS, ...ev.payload?.settings };
 
     // Read clipboard
     let text;
@@ -70,16 +72,5 @@ export class TypeClipboard extends SingletonAction {
       streamDeck.logger.error("Keystroke simulation failed", err);
       await ev.action.showAlert();
     }
-  }
-
-  async #getSettings(ev) {
-    const defaults = {
-      charDelayMs: 20,
-      lineDelayMs: 50,
-      initialDelayMs: 500,
-      maxLength: 10000,
-      licenseKey: "",
-    };
-    return { ...defaults, ...(ev.payload?.settings || {}) };
   }
 }
