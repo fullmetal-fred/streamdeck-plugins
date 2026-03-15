@@ -39,12 +39,37 @@ ClipType works in trial mode (30 characters) without a license key. Purchase a k
 
 Enter your license key in the Property Inspector settings panel.
 
-## Building from Source
+## Development
+
+### Prerequisites
+
+- Node.js 20+
+- pnpm
+- Stream Deck 6.5+
+- `npm install -g @elgato/cli@latest`
+
+### Build & Run Locally
 
 ```bash
 pnpm install
-make build    # Builds icons + assembles .sdPlugin directory
-make package  # Creates .streamDeckPlugin installer
+
+# Build (Rollup bundles src/ → bin/plugin.js, sharp converts SVG → PNG)
+pnpm run build
+
+# Link plugin into Stream Deck for local development
+pnpm run link
+# — or —
+streamdeck link com.fullmetalfred.cliptype.sdPlugin
+
+# Watch mode (auto-rebuilds and restarts plugin on changes)
+pnpm run watch
+```
+
+### Package for Distribution
+
+```bash
+# Creates .streamDeckPlugin file in release/
+pnpm run package
 ```
 
 ## Architecture
@@ -59,17 +84,22 @@ src/
     ├── keyboard.js              # OS-native keystroke sim (osascript / SendKeys)
     └── license.js               # Stripe license key validation
 
-pi/
-└── inspector.html               # Property Inspector (timing + license settings)
+com.fullmetalfred.cliptype.sdPlugin/
+├── manifest.json                # Plugin manifest (source-controlled)
+├── ui/
+│   └── inspector.html           # Property Inspector (timing + license settings)
+├── bin/                         # Rollup output (gitignored)
+│   └── plugin.js
+└── imgs/                        # Generated PNGs (gitignored)
 
 assets/icons/                    # Source SVGs
+rollup.config.mjs                # Bundles src/ → sdPlugin/bin/plugin.js
 scripts/
-├── build.js                     # Assemble .sdPlugin dir from source
 ├── icons.js                     # SVG → PNG conversion (sharp)
-└── package.js                   # Create .streamDeckPlugin ZIP
+└── package.js                   # Creates .streamDeckPlugin file
 ```
 
-**No helper process.** The plugin runs as a Node.js process inside Stream Deck (SDK v2 with `Nodejs` runtime). It reads the clipboard via `pbpaste`/`Get-Clipboard` and types via `osascript`/`SendKeys` — all through `child_process`, zero native npm dependencies.
+**No helper process.** The plugin runs as a Node.js process inside Stream Deck. It reads the clipboard via `pbpaste`/`Get-Clipboard` and types via `osascript`/`SendKeys` — all through `child_process`, zero native npm dependencies.
 
 ## Why Not Just Ctrl+V?
 

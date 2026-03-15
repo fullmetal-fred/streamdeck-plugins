@@ -1,10 +1,10 @@
-.PHONY: install build icons package clean dev
+.PHONY: install build icons package clean link
 
 install:
 	pnpm install
 
 build: install
-	node scripts/build.js
+	pnpm run build
 
 icons:
 	node scripts/icons.js
@@ -12,8 +12,8 @@ icons:
 package: build
 	node scripts/package.js
 
-dev:
-	node scripts/build.js --watch
+link: build
+	pnpm run link
 
 clean:
-	rm -rf com.fullmetalfred.cliptype.sdPlugin release node_modules
+	rm -rf com.fullmetalfred.cliptype.sdPlugin/bin com.fullmetalfred.cliptype.sdPlugin/imgs release node_modules

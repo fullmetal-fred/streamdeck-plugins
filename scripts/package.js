@@ -1,34 +1,34 @@
 /**
  * Package the plugin into a .streamDeckPlugin file.
  *
- * A .streamDeckPlugin file is just a ZIP with a different extension.
- * Double-clicking it installs the plugin in Stream Deck.
- *
- * Uses a pure-Node ZIP writer — no `zip` binary required.
+ * Wraps `streamdeck pack` from @elgato/cli.
+ * Falls back to a pure-Node ZIP writer if the CLI isn't available.
  */
 
+import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { readdir, mkdir } from "node:fs/promises";
 import { join, relative } from "node:path";
-import { execSync } from "node:child_process";
 import { Buffer } from "node:buffer";
 
 const PLUGIN_DIR = "com.fullmetalfred.cliptype.sdPlugin";
-const OUTPUT = "release/com.fullmetalfred.cliptype.streamDeckPlugin";
 
 async function main() {
   console.log("Packaging ClipType...");
-
-  // Install runtime deps in plugin dir
-  console.log("Installing runtime dependencies...");
-  execSync("npm install --omit=dev", {
-    cwd: PLUGIN_DIR,
-    stdio: "inherit",
-  });
-
   await mkdir("release", { recursive: true });
 
-  // Collect all files
+  // Try the official CLI first
+  try {
+    execSync(`streamdeck pack ${PLUGIN_DIR} --output release`, {
+      stdio: "inherit",
+    });
+    console.log("\nPackaged with streamdeck pack.");
+    return;
+  } catch {
+    console.log("streamdeck CLI not available, using built-in ZIP writer...");
+  }
+
+  // Fallback: pure-Node ZIP
   const files = await walk(PLUGIN_DIR);
   const filtered = files.filter(
     (f) => !f.includes(".DS_Store") && !f.includes("__MACOSX")
@@ -43,9 +43,9 @@ async function main() {
     zip.addFile(relPath, content);
   }
 
-  writeFileSync(OUTPUT, zip.finish());
-
-  console.log(`\nPackaged → ${OUTPUT}`);
+  const output = "release/com.fullmetalfred.cliptype.streamDeckPlugin";
+  writeFileSync(output, zip.finish());
+  console.log(`\nPackaged → ${output}`);
   console.log("Double-click to install in Stream Deck.");
 }
 
@@ -132,8 +132,6 @@ class ZipWriter {
   }
 }
 
-// ─── CRC-32 ──────────────────────────────────────────────────────────
-
 const CRC_TABLE = new Uint32Array(256);
 for (let i = 0; i < 256; i++) {
   let c = i;
@@ -150,8 +148,6 @@ function crc32(buf) {
   }
   return (crc ^ 0xffffffff) >>> 0;
 }
-
-// ─── Directory walker ────────────────────────────────────────────────
 
 async function walk(dir) {
   const results = [];

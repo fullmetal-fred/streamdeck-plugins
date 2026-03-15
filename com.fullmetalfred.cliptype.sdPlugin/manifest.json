@@ -1,0 +1,39 @@
+{
+  "Actions": [
+    {
+      "Icon": "imgs/action",
+      "Name": "Type Clipboard",
+      "States": [
+        {
+          "Image": "imgs/action",
+          "TitleAlignment": "bottom",
+          "FontSize": "10"
+        }
+      ],
+      "Tooltip": "Reads your clipboard and types it keystroke-by-keystroke. Built for remote consoles that don't support paste.",
+      "UUID": "com.fullmetalfred.cliptype.type",
+      "PropertyInspectorPath": "ui/inspector.html"
+    }
+  ],
+  "Author": "fullmetalfred",
+  "CodePath": "bin/plugin.js",
+  "Description": "Type clipboard contents via simulated keystrokes. Built for sysadmins pasting into remote consoles.",
+  "Icon": "imgs/plugin",
+  "Name": "ClipType",
+  "Version": "1.0.0",
+  "SDKVersion": 2,
+  "Nodejs": {
+    "Version": "20",
+    "Debug": "enabled"
+  },
+  "OS": [
+    { "Platform": "windows", "MinimumVersion": "10" },
+    { "Platform": "mac", "MinimumVersion": "10.15" }
+  ],
+  "Software": {
+    "MinimumVersion": "6.5"
+  },
+  "Category": "ClipType",
+  "CategoryIcon": "imgs/category",
+  "URL": "https://github.com/fullmetal-fred/streamdeck-plugins"
+}

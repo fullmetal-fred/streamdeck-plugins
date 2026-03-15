@@ -2,20 +2,23 @@
   "name": "com.fullmetalfred.cliptype",
   "version": "1.0.0",
   "description": "Type clipboard contents via simulated keystrokes — built for sysadmins pasting into remote consoles",
-  "main": "src/plugin.js",
   "type": "module",
   "scripts": {
-    "build": "node scripts/build.js",
-    "build:icons": "node scripts/icons.js",
+    "build": "rollup -c && node scripts/icons.js",
+    "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.fullmetalfred.cliptype\"",
     "package": "node scripts/package.js",
-    "dev": "node scripts/build.js --watch",
-    "lint": "eslint src/"
+    "link": "streamdeck link com.fullmetalfred.cliptype.sdPlugin"
   },
   "devDependencies": {
+    "@elgato/cli": "^1.7.0",
+    "@rollup/plugin-commonjs": "^28.0.2",
+    "@rollup/plugin-node-resolve": "^16.0.0",
+    "@rollup/plugin-terser": "^0.4.4",
+    "rollup": "^4.32.1",
     "sharp": "^0.33.0"
   },
   "dependencies": {
-    "@elgato/streamdeck": "^2.0.0"
+    "@elgato/streamdeck": "^2.0.1"
   },
   "engines": {
     "node": ">=20"

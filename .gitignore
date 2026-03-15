@@ -1,6 +1,10 @@
 node_modules/
-com.fullmetalfred.cliptype.sdPlugin/
 release/
 *.streamDeckPlugin
 .DS_Store
 Thumbs.db
+
+# Build artifacts inside sdPlugin (source-controlled dir)
+com.fullmetalfred.cliptype.sdPlugin/bin/
+com.fullmetalfred.cliptype.sdPlugin/imgs/
+com.fullmetalfred.cliptype.sdPlugin/logs/
