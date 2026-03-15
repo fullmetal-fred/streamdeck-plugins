@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>ClipType Settings</title>
+    <link rel="stylesheet" href="inspector.css" />
+  </head>
+  <body>
+    <div class="sdpi-wrapper">
+      <div class="sdpi-heading">ClipType Settings</div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Char Delay (ms)</div>
+        <input
+          class="sdpi-item-value"
+          id="charDelayMs"
+          type="number"
+          min="1"
+          max="500"
+          value="20"
+        />
+      </div>
+      <div class="sdpi-item-hint">
+        Delay between each keystroke. Increase if the target console drops
+        characters.
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Line Delay (ms)</div>
+        <input
+          class="sdpi-item-value"
+          id="lineDelayMs"
+          type="number"
+          min="1"
+          max="2000"
+          value="50"
+        />
+      </div>
+      <div class="sdpi-item-hint">
+        Extra delay after pressing Enter. Useful for slow remote consoles.
+      </div>
+
+      <div class="sdpi-item">
+        <div class="sdpi-item-label">Max Length</div>
+        <input
+          class="sdpi-item-value"
+          id="maxLength"
+          type="number"
+          min="1"
+          max="100000"
+          value="10000"
+        />
+      </div>
+      <div class="sdpi-item-hint">
+        Maximum number of characters to type. Safety limit to prevent
+        accidental mega-pastes.
+      </div>
+
+      <hr class="sdpi-separator" />
+
+      <div class="sdpi-item">
+        <details>
+          <summary class="sdpi-item-label" style="cursor: pointer">
+            How it works
+          </summary>
+          <div class="sdpi-item-hint" style="margin-top: 8px">
+            <p>
+              Press the button to type whatever is on your clipboard, one
+              keystroke at a time. This works in remote consoles (iLO, iDRAC,
+              KVM, vSphere, etc.) where Ctrl+V doesn't work.
+            </p>
+            <p>
+              <strong>Setup:</strong> The ClipType helper must be running in the
+              background. See the README for installation instructions.
+            </p>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <script>
+      /**
+       * Property Inspector for ClipType
+       * Communicates with the plugin via the Stream Deck websocket.
+       */
+
+      let websocket = null;
+      let uuid = null;
+      let actionInfo = null;
+
+      function connectElgatoStreamDeckSocket(
+        inPort,
+        inUUID,
+        inRegisterEvent,
+        inInfo,
+        inActionInfo
+      ) {
+        uuid = inUUID;
+        actionInfo = JSON.parse(inActionInfo);
+
+        websocket = new WebSocket("ws://127.0.0.1:" + inPort);
+
+        websocket.onopen = function () {
+          websocket.send(
+            JSON.stringify({
+              event: inRegisterEvent,
+              uuid: inUUID,
+            })
+          );
+
+          // Request current settings
+          websocket.send(
+            JSON.stringify({
+              event: "getSettings",
+              context: inUUID,
+            })
+          );
+        };
+
+        websocket.onmessage = function (evt) {
+          const data = JSON.parse(evt.data);
+          if (data.event === "didReceiveSettings") {
+            loadSettings(data.payload.settings);
+          }
+        };
+      }
+
+      function loadSettings(settings) {
+        if (settings.charDelayMs !== undefined) {
+          document.getElementById("charDelayMs").value = settings.charDelayMs;
+        }
+        if (settings.lineDelayMs !== undefined) {
+          document.getElementById("lineDelayMs").value = settings.lineDelayMs;
+        }
+        if (settings.maxLength !== undefined) {
+          document.getElementById("maxLength").value = settings.maxLength;
+        }
+      }
+
+      function saveSettings() {
+        const settings = {
+          charDelayMs: parseInt(
+            document.getElementById("charDelayMs").value,
+            10
+          ),
+          lineDelayMs: parseInt(
+            document.getElementById("lineDelayMs").value,
+            10
+          ),
+          maxLength: parseInt(
+            document.getElementById("maxLength").value,
+            10
+          ),
+        };
+
+        websocket.send(
+          JSON.stringify({
+            event: "setSettings",
+            context: uuid,
+            payload: settings,
+          })
+        );
+      }
+
+      // Bind change events
+      document.addEventListener("DOMContentLoaded", function () {
+        ["charDelayMs", "lineDelayMs", "maxLength"].forEach(function (id) {
+          document
+            .getElementById(id)
+            .addEventListener("change", saveSettings);
+        });
+      });
+    </script>
+  </body>
+</html>

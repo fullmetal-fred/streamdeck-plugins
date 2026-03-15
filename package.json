@@ -1,0 +1,11 @@
+{
+  "name": "streamdeck-cliptype",
+  "version": "1.0.0",
+  "description": "Stream Deck plugin that types clipboard contents via simulated keystrokes — built for sysadmins pasting into remote consoles",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.js",
+    "package": "node scripts/package.js"
+  },
+  "license": "UNLICENSED"
+}
