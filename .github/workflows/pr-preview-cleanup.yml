@@ -1,0 +1,81 @@
+name: PR Preview Cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  PREVIEW_DOMAIN: dev.hyperscaleav.com
+  K8S_NAMESPACE: pr-previews
+  CF_TUNNEL_ID: ${{ secrets.CF_TUNNEL_ID }}
+  CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+  CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - name: Set up kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+
+      - name: Delete k8s resources
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          kubectl -n "$K8S_NAMESPACE" delete deployment "cliptype-pr-${PR_NUMBER}" --ignore-not-found
+          kubectl -n "$K8S_NAMESPACE" delete service "cliptype-pr-${PR_NUMBER}" --ignore-not-found
+
+      - name: Remove Cloudflare Tunnel route
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          HOSTNAME="pr-${PR_NUMBER}.${PREVIEW_DOMAIN}"
+
+          CURRENT=$(curl -sf \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/cfd_tunnel/${CF_TUNNEL_ID}/configurations")
+
+          UPDATED=$(echo "$CURRENT" | jq --arg host "$HOSTNAME" '
+            .result.config.ingress |= [.[] | select(.hostname != $host)]
+          ' | jq '.result.config')
+
+          curl -sf -X PUT \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "{\"config\": ${UPDATED}}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/cfd_tunnel/${CF_TUNNEL_ID}/configurations"
+
+      - name: Remove Cloudflare Access application
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          HOSTNAME="pr-${PR_NUMBER}.${PREVIEW_DOMAIN}"
+
+          APP_ID=$(curl -sf \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/access/apps" \
+          | jq -r --arg h "$HOSTNAME" '.result[] | select(.domain == $h) | .id // empty')
+
+          if [ -n "$APP_ID" ]; then
+            curl -sf -X DELETE \
+              -H "Authorization: Bearer ${CF_API_TOKEN}" \
+              "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/access/apps/${APP_ID}"
+          fi
+
+      - name: Delete container image
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ github.event.repository.name }}/pr-preview
+          package-type: container
+          min-versions-to-keep: 0
+          delete-only-pre-release-versions: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true

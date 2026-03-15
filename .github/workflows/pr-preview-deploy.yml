@@ -1,0 +1,234 @@
+name: PR Preview Deploy
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/pr-preview
+  PREVIEW_DOMAIN: dev.hyperscaleav.com
+  K8S_NAMESPACE: pr-previews
+  # Cloudflare tunnel that already runs in the dev k8s cluster
+  CF_TUNNEL_ID: ${{ secrets.CF_TUNNEL_ID }}
+  CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+  CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+  # Cloudflare Access application settings
+  CF_ACCESS_AUD: ${{ secrets.CF_ACCESS_AUD }}
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Package plugin
+        run: npm run package
+
+      - name: Smoke test — artifact exists
+        run: |
+          FILE="dist/com.fullmetalfred.cliptype.streamDeckPlugin"
+          test -f "$FILE" || { echo "::error::Package not found"; exit 1; }
+          SIZE=$(stat -c%s "$FILE")
+          echo "Package size: ${SIZE} bytes"
+          [ "$SIZE" -gt 0 ] || { echo "::error::Package is empty"; exit 1; }
+
+      - name: Stamp preview page
+        run: |
+          sed -i \
+            -e "s|__PR_NUMBER__|${{ github.event.pull_request.number }}|g" \
+            -e "s|__BRANCH__|${{ github.head_ref }}|g" \
+            -e "s|__SHA_SHORT__|${GITHUB_SHA::7}|g" \
+            -e "s|__PR_URL__|${{ github.event.pull_request.html_url }}|g" \
+            -e "s|__BUILD_TIME__|$(date -u +%Y-%m-%dT%H:%M:%SZ)|g" \
+            deploy/preview/index.html
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: pr-${{ github.event.pull_request.number }}-${{ github.sha }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: deploy/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+
+  deploy:
+    needs: build-and-smoke
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+
+      - name: Ensure namespace
+        run: |
+          kubectl create namespace "$K8S_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Deploy to k8s
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          IMAGE: ${{ needs.build-and-smoke.outputs.image_tag }}
+        run: |
+          sed \
+            -e "s|__PR_NUMBER__|${PR_NUMBER}|g" \
+            -e "s|__IMAGE__|${IMAGE}|g" \
+            deploy/k8s/deployment.yaml \
+          | kubectl apply -f -
+
+          kubectl -n "$K8S_NAMESPACE" rollout status \
+            "deployment/cliptype-pr-${PR_NUMBER}" --timeout=120s
+
+      - name: Register Cloudflare Tunnel route
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          HOSTNAME="pr-${PR_NUMBER}.${PREVIEW_DOMAIN}"
+          SERVICE="http://cliptype-pr-${PR_NUMBER}.${K8S_NAMESPACE}.svc.cluster.local:80"
+
+          # Get current tunnel config
+          CURRENT=$(curl -sf \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/cfd_tunnel/${CF_TUNNEL_ID}/configurations" \
+          )
+
+          # Build new ingress rule via jq
+          UPDATED=$(echo "$CURRENT" | jq --arg host "$HOSTNAME" --arg svc "$SERVICE" '
+            .result.config.ingress as $ing |
+            # Remove any existing rule for this hostname
+            [$ing[] | select(.hostname != $host)] |
+            # Insert new rule before the catch-all (last entry)
+            . as $rules |
+            ($rules | length) as $len |
+            $rules[:$len-1] + [{"hostname": $host, "service": $svc}] + [$rules[$len-1]] |
+            .result.config.ingress = .
+          ' <<< "$CURRENT" | jq '.result.config')
+
+          # PUT updated config
+          curl -sf -X PUT \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "{\"config\": ${UPDATED}}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/cfd_tunnel/${CF_TUNNEL_ID}/configurations"
+
+          echo "PREVIEW_URL=https://${HOSTNAME}" >> "$GITHUB_ENV"
+
+      - name: Create Cloudflare Access application
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          HOSTNAME="pr-${PR_NUMBER}.${PREVIEW_DOMAIN}"
+
+          # Check if application already exists
+          EXISTING=$(curl -sf \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/access/apps" \
+          | jq -r --arg h "$HOSTNAME" '.result[] | select(.domain == $h) | .id // empty')
+
+          if [ -z "$EXISTING" ]; then
+            # Create Access application with email verification policy
+            APP=$(curl -sf -X POST \
+              -H "Authorization: Bearer ${CF_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              --data "{
+                \"name\": \"ClipType PR #${PR_NUMBER} Preview\",
+                \"domain\": \"${HOSTNAME}\",
+                \"type\": \"self_hosted\",
+                \"session_duration\": \"24h\",
+                \"auto_redirect_to_identity\": false
+              }" \
+              "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/access/apps")
+
+            APP_ID=$(echo "$APP" | jq -r '.result.id')
+          else
+            APP_ID="$EXISTING"
+          fi
+
+          # Create (or update) allow policy — email verification via one-time pin
+          curl -sf -X POST \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data '{
+              "name": "Email verification",
+              "decision": "allow",
+              "include": [{"email_domain": {"domain": "*"}}],
+              "precedence": 1
+            }' \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/access/apps/${APP_ID}/policies" \
+            || true  # tolerate if policy already exists
+
+      - name: Comment on PR with preview URL
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const previewUrl = process.env.PREVIEW_URL;
+            const sha = context.sha.substring(0, 7);
+
+            const marker = '<!-- cliptype-preview-bot -->';
+            const body = [
+              marker,
+              `### Preview Deployment`,
+              ``,
+              `| | |`,
+              `|---|---|`,
+              `| **URL** | ${previewUrl} |`,
+              `| **Commit** | \`${sha}\` |`,
+              `| **Status** | Live |`,
+              ``,
+              `> Protected by Cloudflare Access — you will be prompted for email verification.`,
+            ].join('\n');
+
+            // Update existing comment or create new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+
+            const existing = comments.find(c => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body,
+              });
+            }

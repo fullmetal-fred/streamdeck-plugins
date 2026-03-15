@@ -1,0 +1,62 @@
+# This manifest adds an ingress rule to the existing cloudflared tunnel
+# so that pr-<N>.dev.hyperscaleav.com routes to the PR's service.
+#
+# It assumes cloudflared is already running in the cluster as a Deployment
+# with a ConfigMap named "cloudflared-config" in namespace "cloudflare-system".
+#
+# The GitHub Actions workflow patches this ConfigMap dynamically.
+# See .github/workflows/pr-preview-deploy.yml for the implementation.
+#
+# If you prefer a standalone tunnel per PR, swap this for a full
+# cloudflared Deployment + ConfigMap pair (commented alternative below).
+
+# --- Alternative: standalone tunnel per PR ---
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: cloudflared-pr-__PR_NUMBER__
+#   namespace: pr-previews
+# data:
+#   config.yaml: |
+#     tunnel: __TUNNEL_ID__
+#     credentials-file: /etc/cloudflared/credentials.json
+#     ingress:
+#       - hostname: pr-__PR_NUMBER__.dev.hyperscaleav.com
+#         service: http://cliptype-pr-__PR_NUMBER__.pr-previews.svc.cluster.local:80
+#       - service: http_status:404
+# ---
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: cloudflared-pr-__PR_NUMBER__
+#   namespace: pr-previews
+# spec:
+#   replicas: 1
+#   selector:
+#     matchLabels:
+#       app: cloudflared
+#       pr: "__PR_NUMBER__"
+#   template:
+#     metadata:
+#       labels:
+#         app: cloudflared
+#         pr: "__PR_NUMBER__"
+#     spec:
+#       containers:
+#         - name: cloudflared
+#           image: cloudflare/cloudflared:latest
+#           args: ["tunnel", "--config", "/etc/cloudflared/config.yaml", "run"]
+#           volumeMounts:
+#             - name: config
+#               mountPath: /etc/cloudflared/config.yaml
+#               subPath: config.yaml
+#             - name: credentials
+#               mountPath: /etc/cloudflared/credentials.json
+#               subPath: credentials.json
+#       volumes:
+#         - name: config
+#           configMap:
+#             name: cloudflared-pr-__PR_NUMBER__
+#         - name: credentials
+#           secret:
+#             secretName: cloudflared-tunnel-credentials
